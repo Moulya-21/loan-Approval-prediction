@@ -17,6 +17,18 @@ st.set_page_config(
 
 
 # ============================================================
+# PATHS
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "model"
+
+MODEL_PATH = MODEL_DIR / "best_model.pkl"
+ENCODER_PATH = MODEL_DIR / "label_encoders.pkl"
+FEATURE_PATH = MODEL_DIR / "feature_names.pkl"
+
+
+# ============================================================
 # TITLE
 # ============================================================
 
@@ -26,8 +38,7 @@ st.markdown(
     """
     ### Machine Learning Based Loan Prediction
 
-    Enter the applicant details below and the trained
-    machine learning model will predict the loan status.
+    Enter the applicant details below to predict the loan status.
     """
 )
 
@@ -35,34 +46,20 @@ st.divider()
 
 
 # ============================================================
-# PROJECT / MODEL PATH
-# Works on both Windows and Streamlit Cloud
+# CHECK FILES
 # ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / "model"
+required_files = [
+    MODEL_PATH,
+    ENCODER_PATH,
+    FEATURE_PATH
+]
 
-
-MODEL_PATH = MODEL_DIR / "best_model.pkl"
-ENCODER_PATH = MODEL_DIR / "label_encoders.pkl"
-FEATURE_PATH = MODEL_DIR / "feature_names.pkl"
-
-
-# ============================================================
-# CHECK MODEL FILES
-# ============================================================
-
-missing_files = []
-
-if not MODEL_PATH.exists():
-    missing_files.append("model/best_model.pkl")
-
-if not ENCODER_PATH.exists():
-    missing_files.append("model/label_encoders.pkl")
-
-if not FEATURE_PATH.exists():
-    missing_files.append("model/feature_names.pkl")
-
+missing_files = [
+    str(file.relative_to(BASE_DIR))
+    for file in required_files
+    if not file.exists()
+]
 
 if missing_files:
 
@@ -71,12 +68,7 @@ if missing_files:
     st.write("Missing files:")
 
     for file in missing_files:
-        st.write(f"- `{file}`")
-
-    st.info(
-        "Make sure the model folder and its files are uploaded "
-        "to your GitHub repository."
-    )
+        st.code(file)
 
     st.stop()
 
@@ -97,19 +89,13 @@ def load_model_files():
     return model, label_encoders, feature_names
 
 
-# ============================================================
-# LOAD MODEL FILES
-# ============================================================
-
 try:
 
     model, label_encoders, feature_names = load_model_files()
 
-    st.success("✅ Machine Learning model loaded successfully!")
-
 except Exception as e:
 
-    st.error("❌ Error while loading the machine learning model.")
+    st.error("❌ Failed to load model files.")
 
     st.exception(e)
 
@@ -117,16 +103,21 @@ except Exception as e:
 
 
 # ============================================================
-# CONVERT FEATURE NAMES
+# FEATURE NAMES
 # ============================================================
 
 if isinstance(feature_names, np.ndarray):
-
     feature_names = feature_names.tolist()
 
 elif isinstance(feature_names, tuple):
-
     feature_names = list(feature_names)
+
+
+# ============================================================
+# MODEL STATUS
+# ============================================================
+
+st.success("✅ Machine Learning model loaded successfully!")
 
 
 # ============================================================
@@ -137,25 +128,26 @@ st.sidebar.title("🏦 Loan Prediction")
 
 st.sidebar.info(
     """
-    This application uses a trained
-    Machine Learning model to predict
-    loan approval.
+    This application predicts loan approval
+    using a trained Machine Learning model.
     """
 )
 
+st.sidebar.write("Model: Best Model Pipeline")
+st.sidebar.write("Classes: 0 = Rejected, 1 = Approved")
+
 
 # ============================================================
-# APPLICANT INFORMATION
+# APPLICANT DETAILS
 # ============================================================
 
 st.header("👤 Applicant Information")
-
 
 col1, col2 = st.columns(2)
 
 
 # ============================================================
-# PERSONAL INFORMATION
+# PERSONAL DETAILS
 # ============================================================
 
 with col1:
@@ -189,7 +181,7 @@ with col1:
 
 
 # ============================================================
-# FINANCIAL INFORMATION
+# FINANCIAL DETAILS
 # ============================================================
 
 with col2:
@@ -241,7 +233,7 @@ with col2:
 
 st.divider()
 
-predict = st.button(
+predict_button = st.button(
     "🔮 Predict Loan Approval",
     type="primary",
     use_container_width=True
@@ -252,12 +244,12 @@ predict = st.button(
 # PREDICTION
 # ============================================================
 
-if predict:
+if predict_button:
 
     try:
 
         # ----------------------------------------------------
-        # CREATE INPUT DATAFRAME
+        # CREATE RAW INPUT
         # ----------------------------------------------------
 
         input_data = pd.DataFrame({
@@ -288,118 +280,23 @@ if predict:
 
 
         # ----------------------------------------------------
-        # ENCODE CATEGORICAL FEATURES
+        # IMPORTANT:
+        # best_model.pkl is a PIPELINE.
+        #
+        # We first try the raw data because the pipeline
+        # may already contain preprocessing.
         # ----------------------------------------------------
 
-        if isinstance(label_encoders, dict):
-
-            for column, encoder in label_encoders.items():
-
-                if column in input_data.columns:
-
-                    try:
-
-                        input_data[column] = encoder.transform(
-                            input_data[column]
-                        )
-
-                    except ValueError:
-
-                        st.error(
-                            f"❌ Unknown value found in `{column}`."
-                        )
-
-                        st.stop()
-
-        else:
-
-            st.warning(
-                "⚠️ Label encoders are not stored as a dictionary."
-            )
-
-
-        # ----------------------------------------------------
-        # MATCH TRAINING FEATURES
-        # ----------------------------------------------------
-
-        input_data = input_data.reindex(
-            columns=feature_names,
-            fill_value=0
-        )
-
-
-        # ----------------------------------------------------
-        # MAKE PREDICTION
-        # ----------------------------------------------------
+        input_data = input_data[feature_names]
 
         prediction = model.predict(input_data)[0]
 
 
         # ----------------------------------------------------
-        # RESULT
-        # ----------------------------------------------------
-
-        st.divider()
-
-        st.header("📊 Prediction Result")
-
-
-        # Convert prediction to string for safe comparison
-
-        prediction_string = str(prediction).strip().lower()
-
-
-        approved_values = [
-
-            "1",
-
-            "yes",
-
-            "y",
-
-            "approved",
-
-            "loan approved",
-
-            "true"
-
-        ]
-
-
-        if prediction_string in approved_values:
-
-            st.success(
-                "🎉 LOAN APPROVED"
-            )
-
-            st.markdown(
-                """
-                ### ✅ Congratulations!
-
-                Based on the trained Machine Learning model,
-                the applicant's loan is predicted to be **Approved**.
-                """
-            )
-
-        else:
-
-            st.error(
-                "❌ LOAN NOT APPROVED"
-            )
-
-            st.markdown(
-                """
-                ### ❌ Loan Prediction
-
-                Based on the trained Machine Learning model,
-                the applicant's loan is predicted to be **Not Approved**.
-                """
-            )
-
-
-        # ----------------------------------------------------
         # PREDICTION PROBABILITY
         # ----------------------------------------------------
+
+        confidence = None
 
         if hasattr(model, "predict_proba"):
 
@@ -411,6 +308,53 @@ if predict:
                 np.max(probabilities) * 100
             )
 
+
+        # ----------------------------------------------------
+        # RESULT
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.header("📊 Prediction Result")
+
+
+        if int(prediction) == 1:
+
+            st.success(
+                "🎉 LOAN APPROVED"
+            )
+
+            st.markdown(
+                """
+                ### ✅ Loan Approved
+
+                The Machine Learning model predicts that
+                this application is likely to be approved.
+                """
+            )
+
+        else:
+
+            st.error(
+                "❌ LOAN NOT APPROVED"
+            )
+
+            st.markdown(
+                """
+                ### ❌ Loan Not Approved
+
+                The Machine Learning model predicts that
+                this application is likely to be rejected.
+                """
+            )
+
+
+        # ----------------------------------------------------
+        # CONFIDENCE
+        # ----------------------------------------------------
+
+        if confidence is not None:
+
             st.metric(
                 "Prediction Confidence",
                 f"{confidence:.2f}%"
@@ -418,68 +362,42 @@ if predict:
 
 
         # ----------------------------------------------------
-        # SHOW INPUT DATA
+        # INPUT SUMMARY
         # ----------------------------------------------------
 
         st.subheader("📋 Applicant Details")
 
-
         applicant_details = pd.DataFrame({
 
             "Parameter": [
-
                 "Gender",
-
                 "Married",
-
                 "Dependents",
-
                 "Education",
-
                 "Self Employed",
-
                 "Applicant Income",
-
                 "Co-applicant Income",
-
                 "Loan Amount",
-
                 "Loan Amount Term",
-
                 "Credit History",
-
                 "Property Area"
-
             ],
 
             "Value": [
-
                 gender,
-
                 married,
-
                 dependents,
-
                 education,
-
                 self_employed,
-
                 applicant_income,
-
                 coapplicant_income,
-
                 loan_amount,
-
                 loan_amount_term,
-
                 credit_history,
-
                 property_area
-
             ]
 
         })
-
 
         st.dataframe(
             applicant_details,
@@ -488,26 +406,10 @@ if predict:
         )
 
 
-        # ----------------------------------------------------
-        # MODEL INFORMATION
-        # ----------------------------------------------------
-
-        st.subheader("🤖 Model Information")
-
-        st.write(
-            "Prediction generated using the trained "
-            "Machine Learning model."
-        )
-
-
-    # ========================================================
-    # ERROR HANDLING
-    # ========================================================
-
     except Exception as e:
 
         st.error(
-            "❌ Prediction could not be completed."
+            "❌ Prediction failed."
         )
 
         st.exception(e)
