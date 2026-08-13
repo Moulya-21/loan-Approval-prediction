@@ -1,0 +1,6 @@
+Model,Accuracy,Precision,Recall,F1 Score
+Logistic Regression,86.18,84.0,98.82,90.81
+SVM,85.37,83.17,98.82,90.32
+Naive Bayes,84.55,83.67,96.47,89.62
+Random Forest,83.74,84.95,92.94,88.76
+Decision Tree,76.42,82.56,83.53,83.04
